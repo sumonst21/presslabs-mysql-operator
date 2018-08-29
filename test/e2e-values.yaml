@@ -2,9 +2,6 @@ extraArgs:
   - -v=3
 
 orchestrator:
-  orchestratorConf: 
-    DiscoverByShowSlaveHosts: true
-  image: quay.io/presslabs/orchestrator:v3.0.12-r24
   topologyPassword: password1
   antiAffinity: soft
   replicas: 1
