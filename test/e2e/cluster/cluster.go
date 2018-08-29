@@ -50,7 +50,7 @@ var _ = Describe("Mysql cluster tests", func() {
 
 	BeforeEach(func() {
 		// be careful, mysql allowed hostname lenght is <63
-		name = fmt.Sprintf("cl-%d", rand.Int31()/1000)
+		name = fmt.Sprintf("cl-%d", rand.Int31()%10000)
 
 		By("creating a new cluster secret")
 		pw = fmt.Sprintf("pw-%d", rand.Int31())
@@ -244,6 +244,50 @@ var _ = Describe("Mysql cluster tests", func() {
 		f.NodeEventuallyCondition(cluster, cluster.GetPodHostname(1), api.NodeConditionMaster, core.ConditionFalse, failoverTimeout)
 		f.NodeEventuallyCondition(cluster, cluster.GetPodHostname(1), api.NodeConditionReadOnly, core.ConditionTrue, failoverTimeout)
 
+		cluster, err = f.MyClientSet.MysqlV1alpha1().MysqlClusters(f.Namespace.Name).Get(cluster.Name, meta.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Failed to get cluster %s", cluster.Name)
+
+	})
+	It("cluster writable", func() {
+
+		cluster.Spec.Replicas = 2
+		cluster.Spec.ReadOnly = true
+
+		cluster, err = f.MyClientSet.MysqlV1alpha1().MysqlClusters(f.Namespace.Name).Update(cluster)
+		Expect(err).NotTo(HaveOccurred(), "Failed to update cluster: '%s'", cluster.Name)
+
+		// test cluster to be ready
+		By("test cluster is ready after cluster update")
+		testClusterReadiness(f, cluster)
+		By("test cluster is registered in orchestrator after cluster update")
+		testClusterReadOnlyIsRegistredWithOrchestrator(f, cluster)
+
+		cluster, err = f.MyClientSet.MysqlV1alpha1().MysqlClusters(f.Namespace.Name).Get(cluster.Name, meta.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Failed to get cluster %s", cluster.Name)
+
+		// expect cluster to be marked readOnly
+		By("test cluster to be readOnly")
+		f.ClusterEventuallyCondition(cluster, api.ClusterConditionReadOnly, core.ConditionTrue, f.Timeout)
+
+		// expect node to be marked as lagged and removed from service
+		By("test cluster node 0 to be readOnly")
+		f.NodeEventuallyCondition(cluster, cluster.GetPodHostname(0), api.NodeConditionReadOnly, core.ConditionTrue, 20*time.Second)
+		// node 1 should not be in healty service
+		By("test cluster endpoints after delayed slave")
+		testClusterEndpoints(f, cluster, []int{0}, []int{0, 1})
+
+		cluster, err = f.MyClientSet.MysqlV1alpha1().MysqlClusters(f.Namespace.Name).Get(cluster.Name, meta.GetOptions{})
+		Expect(err).NotTo(HaveOccurred(), "Failed to get cluster %s", cluster.Name)
+
+		cluster.Spec.ReadOnly = false
+
+		cluster, err = f.MyClientSet.MysqlV1alpha1().MysqlClusters(f.Namespace.Name).Update(cluster)
+		Expect(err).NotTo(HaveOccurred(), "Failed to update cluster: '%s'", cluster.Name)
+
+		By("test cluster is ready after cluster update")
+		testClusterReadiness(f, cluster)
+		By("test cluster is registered in orchestrator after cluster update")
+		testClusterIsRegistredWithOrchestrator(f, cluster)
 	})
 
 })
