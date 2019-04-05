@@ -1,5 +1,5 @@
 PACKAGE_NAME := github.com/presslabs/mysql-operator
-REGISTRY := quay.io/presslabs
+REGISTRY := banzaicloud
 IMAGE_TAGS := canary
 BUILD_TAG := build
 
@@ -40,12 +40,16 @@ DOCKER_IMAGES := mysql-operator mysql-helper mysql-e2e-tests
 .PHONY: build
 build: $(BIN_CMDS)
 
+bin/dlv:
+	go get github.com/go-delve/delve/cmd/dlv
+	GOOS=linux go build -o bin/dlv github.com/go-delve/delve/cmd/dlv
+
 bin/%: $(GOFILES) Makefile
 	CGO_ENABLED=0 \
 	GOOS=$(shell echo "$*" | cut -d'_' -f2) \
 	GOARCH=$(shell echo "$*" | cut -d'_' -f3) \
 		go build $(GOFLAGS) \
-			-v -o $@ cmd/$(shell echo "$*" | cut -d'_' -f1)/main.go
+			-gcflags "all=-N -l" -v -o $@ cmd/$(shell echo "$*" | cut -d'_' -f1)/main.go
 
 # Testing targets
 #################
@@ -83,11 +87,12 @@ clean:
 # Docker image targets
 ######################
 .PHONY: install-docker
-install-docker : $(patsubst %, bin/%_linux_amd64, $(CMDS))
+install-docker : $(patsubst %, bin/%_linux_amd64, $(CMDS)) bin/dlv
 	set -e; \
 		for cmd in $(DOCKER_IMAGES); do \
 			bin_file=bin/$${cmd}_linux_amd64; \
 			[ -f $${bin_file} ] && install -m 755 $${bin_file} $(HACK_DIR)/docker/$${cmd}/$${cmd} || true ; \
+			install -m 755 bin/dlv $(HACK_DIR)/docker/$${cmd}/dlv ; \
 		done
 
 .PHONY: images

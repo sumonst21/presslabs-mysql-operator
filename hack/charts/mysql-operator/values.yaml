@@ -9,6 +9,8 @@ helperImage: quay.io/presslabs/mysql-helper:v0.1.14
 
 installCRDs: true
 
+debug: false
+
 resources: {}
   # limits:
   #  cpu: 100m

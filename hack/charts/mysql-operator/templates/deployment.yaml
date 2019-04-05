@@ -35,7 +35,19 @@ spec:
                 secretKeyRef:
                   name: {{ template "mysql-operator.orchestrator.fullname" . }}
                   key: TOPOLOGY_PASSWORD
+          {{- if .Values.debug }}
+          command: ["dlv"]
+          {{- end }}
           args:
+            {{- if .Values.debug }}
+            - --listen=:40000
+            - --headless=true
+            - --api-version=2
+            - --accept-multiclient
+            - exec
+            - /usr/bin/mysql-operator
+            - --
+            {{- end }}
             - --orchestrator-uri=http://{{ template "mysql-operator.orchestrator.fullname" . }}.{{ .Release.Namespace }}/api
             - --leader-election-namespace={{ .Release.Namespace }}
             {{- if .Values.helperImage }}
@@ -47,9 +59,18 @@ spec:
             {{- if .Values.installCRDs }}
             - --install-crds
             {{- end }}
+          {{- if .Values.debug }}
+          ports:
+            - containerPort: 40000
+          {{- end }}
           resources:
             {{ toYaml .Values.resources | nindent 12 }}
           livenessProbe:
+            {{- if .Values.debug }}
+            failureThreshold: 100000
+            initialDelaySeconds: 100
+            periodSeconds: 100
+            {{- end }}
             httpGet:
               path: /health
               port: 80
